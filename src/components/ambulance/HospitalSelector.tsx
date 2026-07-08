@@ -157,7 +157,7 @@ export const HospitalSelector = ({
         // A hospital with 100% match at 15km scores like ~5km
         // A hospital with 0% match at 2km scores like ~2km
         // This ensures nearby hospitals still beat far-away ones even with full equipment match
-        const equipmentWeight = 10; // km bonus for full equipment match
+        const equipmentWeight = 6; // km bonus for full equipment match
         const aScore = aDist - (aMatchRatio * equipmentWeight);
         const bScore = bDist - (bMatchRatio * equipmentWeight);
 
@@ -372,8 +372,14 @@ export const HospitalSelector = ({
                   )}
                   {ambulanceLocation && filteredHospitals.map((hospital, index) => {
                     const hasRequiredEquip = patientDataForAI?.requiredEquipment && patientDataForAI.requiredEquipment.length > 0;
-                    // Tag the first hospital as recommended if there are required equipments, since it's already sorted by best match
-                    const isRecommended = index === 0 && !!hasRequiredEquip;
+                    // Show recommended badge on any hospital with >= 50% equipment match
+                    let isRecommended = false;
+                    if (hasRequiredEquip) {
+                      const hospEquip = (hospital.equipment || []).map(e => e.toLowerCase());
+                      const reqEquip = patientDataForAI.requiredEquipment!.map(e => e.toLowerCase());
+                      const matchCount = reqEquip.filter(eq => hospEquip.includes(eq)).length;
+                      isRecommended = matchCount >= Math.ceil(reqEquip.length * 0.5);
+                    }
 
                     return (
                       <HospitalRow
