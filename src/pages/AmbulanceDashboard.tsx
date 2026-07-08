@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { calculateETA } from '@/utils/distanceCalculator';
 import { supabase } from '@/integrations/supabase/client';
-import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const AmbulanceDashboard = () => {
   const [selectedTriage, setSelectedTriage] = useState<TriageLevel | null>(null);
@@ -24,7 +24,7 @@ const AmbulanceDashboard = () => {
   const [editingSymptomsAlertId, setEditingSymptomsAlertId] = useState<string | null>(null);
   const [updatedSymptoms, setUpdatedSymptoms] = useState<string[]>([]);
   const [liveVitalsMap, setLiveVitalsMap] = useState<Record<string, { spo2: number; heartRate: number }>>({});
-  const { logout, alerts, completeCase, currentUser, hospitals, changeHospital, addHospital, updatePatient } = useApp();
+  const { logout, alerts, completeCase, currentUser, hospitals, changeHospital, addHospital, updatePatient, isLoading } = useApp();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -132,6 +132,23 @@ const AmbulanceDashboard = () => {
       setEditingSymptomsAlertId(null);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen p-6" style={{ background: 'linear-gradient(135deg, hsl(220, 40%, 8%) 0%, hsl(220, 45%, 15%) 100%)' }}>
+        <div className="max-w-6xl mx-auto space-y-6">
+          <div className="flex justify-between items-center mb-8">
+            <Skeleton className="h-10 w-48" />
+            <Skeleton className="h-10 w-24" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Skeleton className="h-[400px] w-full" />
+            <Skeleton className="h-[400px] w-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

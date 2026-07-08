@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Activity, Heart } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
 import { useApp } from '@/contexts/AppContext';
+import { useLiveVitals } from '@/hooks/useLiveVitals';
 
 interface LiveVitalsProps {
   onVitalsUpdate?: (spo2: number, heartRate: number) => void;
@@ -10,9 +10,7 @@ interface LiveVitalsProps {
 
 export const LiveVitalsDisplay = ({ onVitalsUpdate }: LiveVitalsProps) => {
   const { currentAmbulanceId } = useApp();
-  const [spo2, setSpo2] = useState(98);
-  const [heartRate, setHeartRate] = useState(72);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const { spo2, heartRate, lastUpdate } = useLiveVitals(currentAmbulanceId);
   const [, setTick] = useState(0);
 
   // Update the "X seconds ago" display every second
@@ -23,66 +21,12 @@ export const LiveVitalsDisplay = ({ onVitalsUpdate }: LiveVitalsProps) => {
     return () => clearInterval(interval);
   }, []);
 
-  // Subscribe to live_vitals table and display whatever values are there
+  // Fire onVitalsUpdate callback when values change
   useEffect(() => {
-    if (!currentAmbulanceId) return;
-
-    console.log('Setting up live vitals subscription for ambulance:', currentAmbulanceId);
-
-    // Initial fetch
-    const fetchVitals = async () => {
-      const { data, error } = await supabase
-        .from('live_vitals')
-        .select('*')
-        .eq('ambulance_id', currentAmbulanceId)
-        .maybeSingle();
-
-      if (!error && data) {
-        const newSpo2 = data.spo2_pct || 98;
-        const newHR = data.hr_bpm || 72;
-        setSpo2(newSpo2);
-        setHeartRate(newHR);
-        setLastUpdate(new Date(data.updated_at));
-        onVitalsUpdate?.(newSpo2, newHR);
-        console.log('Initial vitals loaded:', { spo2: newSpo2, hr: newHR });
-      } else {
-        console.log('No vitals data found for ambulance:', currentAmbulanceId);
-      }
-    };
-
-    fetchVitals();
-
-    // Subscribe to real-time updates
-    const channel = supabase
-      .channel(`live-vitals-${currentAmbulanceId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'live_vitals',
-          filter: `ambulance_id=eq.${currentAmbulanceId}`
-        },
-        (payload) => {
-          console.log('Live vitals update received:', payload);
-          if (payload.new && typeof payload.new === 'object') {
-            const data = payload.new as any;
-            const newSpo2 = data.spo2_pct || 98;
-            const newHR = data.hr_bpm || 72;
-            setSpo2(newSpo2);
-            setHeartRate(newHR);
-            setLastUpdate(new Date(data.updated_at));
-            onVitalsUpdate?.(newSpo2, newHR);
-            console.log('Vitals updated:', { spo2: newSpo2, hr: newHR });
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentAmbulanceId, onVitalsUpdate]);
+    if (onVitalsUpdate) {
+      onVitalsUpdate(spo2, heartRate);
+    }
+  }, [spo2, heartRate, onVitalsUpdate]);
 
   return (
     <div className="glass-effect p-6 rounded-xl border border-ambulance-border interactive-card group">

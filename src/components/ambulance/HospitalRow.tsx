@@ -10,9 +10,10 @@ interface HospitalRowProps {
   hospital: Hospital;
   isSelected: boolean;
   onSelect: (hospital: Hospital) => void;
+  isRecommended?: boolean;
 }
 
-export const HospitalRow = ({ hospital, isSelected, onSelect }: HospitalRowProps) => {
+export const HospitalRow = ({ hospital, isSelected, onSelect, isRecommended }: HospitalRowProps) => {
   const distance = hospital.distance || 0;
   const eta = hospital.eta || 0;
   const locality = getLocality(hospital.address);
@@ -41,13 +42,14 @@ export const HospitalRow = ({ hospital, isSelected, onSelect }: HospitalRowProps
       className={cn(
         "p-5 transition-all border shadow-sm cursor-pointer min-h-[110px] w-full",
         isSelected && "ring-2 ring-primary bg-primary/5 border-primary shadow-lg",
-        !isSelected && "hover:border-primary/50 hover:shadow-md"
+        !isSelected && "hover:border-primary/50 hover:shadow-md",
+        isRecommended && "border-green-500/50 bg-green-50/30"
       )}
     >
       <div className="flex items-center gap-5">
         {/* Larger icon */}
-        <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <Building2 className="w-8 h-8 text-primary" />
+        <div className={cn("w-16 h-16 rounded-lg flex items-center justify-center flex-shrink-0", isRecommended ? "bg-green-100" : "bg-primary/10")}>
+          <Building2 className={cn("w-8 h-8", isRecommended ? "text-green-600" : "text-primary")} />
         </div>
 
         {/* Hospital info */}
@@ -55,6 +57,11 @@ export const HospitalRow = ({ hospital, isSelected, onSelect }: HospitalRowProps
           <div className="flex items-start justify-between gap-3">
             <h3 className="font-semibold text-lg leading-tight line-clamp-2 break-words">
               {hospital.name}
+              {isRecommended && (
+                <Badge variant="default" className="ml-2 bg-green-600 hover:bg-green-700 text-xs">
+                  Recommended Match
+                </Badge>
+              )}
             </h3>
             {isSelected && (
               <CheckCircle className="w-6 h-6 text-primary flex-shrink-0" />

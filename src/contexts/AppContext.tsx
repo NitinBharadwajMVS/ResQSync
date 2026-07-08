@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { Patient, Alert, Hospital, AuditLog } from '@/types/patient';
 import { supabase } from '@/integrations/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { playAlertSound } from '@/utils/alertSounds';
 
 interface AppContextType {
   patients: Patient[];
@@ -20,6 +21,7 @@ interface AppContextType {
   addHospital: (hospital: Hospital) => Promise<void>;
   login: (usernameOrEmail: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  isLoading: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -32,6 +34,71 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [currentHospitalId, setCurrentHospitalId] = useState<string | null>(null);
   const [currentAmbulanceId, setCurrentAmbulanceId] = useState<string | null>(null);
   const [alertsChannel, setAlertsChannel] = useState<RealtimeChannel | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Handle session persistence
+  useEffect(() => {
+    let mounted = true;
+
+    const restoreUser = async (userId: string) => {
+      try {
+        const { data: appUser, error: appUserError } = await supabase
+          .from('app_users')
+          .select('*')
+          .eq('auth_uid', userId)
+          .single();
+
+        if (appUserError || !appUser) {
+          console.error('Error loading user info during restore:', appUserError);
+          return;
+        }
+
+        if (mounted) {
+          setCurrentUser({
+            id: userId,
+            username: appUser.username,
+            role: appUser.role,
+            linkedEntity: appUser.linked_entity
+          });
+
+          if (appUser.role === 'hospital') {
+            setCurrentHospitalId(appUser.linked_entity);
+          } else if (appUser.role === 'ambulance') {
+            setCurrentAmbulanceId(appUser.linked_entity);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to restore user:', err);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user && mounted) {
+        restoreUser(session.user.id);
+      } else if (mounted) {
+        setIsLoading(false);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (session?.user && mounted) {
+          restoreUser(session.user.id);
+        } else if (!session && mounted) {
+          setCurrentUser(null);
+          setCurrentHospitalId(null);
+          setCurrentAmbulanceId(null);
+        }
+      }
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Load hospitals from Supabase
   useEffect(() => {
@@ -44,6 +111,38 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       }
     };
     loadHospitals();
+
+    // Set up realtime subscription for hospitals
+    const channel = supabase
+      .channel('hospitals-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'hospitals'
+        },
+        (payload) => {
+          console.log('Realtime hospital update:', payload);
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const hospital = payload.new as Hospital;
+            setHospitals(prev => {
+              const index = prev.findIndex(h => h.id === hospital.id);
+              if (index >= 0) {
+                const updated = [...prev];
+                updated[index] = hospital;
+                return updated;
+              }
+              return [...prev, hospital];
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Load patients from Supabase
@@ -82,8 +181,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           gender: p.gender as 'male' | 'female' | 'other',
           contact: p.contact,
           complaint: p.complaint || '',
-          triageLevel: p.triage_level as any,
-          vitals: p.vitals as any,
+          triageLevel: p.triage_level as unknown as TriageLevel,
+          vitals: p.vitals as unknown as Vitals,
           medicalHistory: p.medical_history || [],
           timestamp: p.created_at || new Date().toISOString()
         })));
@@ -136,20 +235,20 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             gender: alert.patient_gender as 'male' | 'female' | 'other',
             contact: alert.patient_contact || '',
             complaint: alert.patient_complaint || '',
-            vitals: alert.vitals as any,
-            triageLevel: alert.triage_level as any,
+            vitals: alert.vitals as unknown as Vitals,
+            triageLevel: alert.triage_level as unknown as TriageLevel,
             timestamp: alert.timestamp
           },
           ambulanceId: alert.ambulance_id,
           hospitalId: alert.hospital_id,
           eta: alert.eta || 0,
-          status: alert.status as any,
+          status: alert.status as unknown as Alert['status'],
           timestamp: alert.timestamp,
           completedAt: alert.completed_at || undefined,
           requiredEquipment: alert.required_equipment || [],
           declineReason: alert.decline_reason || undefined,
           previousHospitalIds: alert.previous_hospital_ids || [],
-          auditLog: (alert.audit_log as any) || []
+          auditLog: (alert.audit_log as unknown as AuditLog[]) || []
         })));
       }
     };
@@ -187,20 +286,20 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                 gender: alert.patient_gender as 'male' | 'female' | 'other',
                 contact: alert.patient_contact || '',
                 complaint: alert.patient_complaint || '',
-                vitals: alert.vitals as any,
-                triageLevel: alert.triage_level as any,
+                vitals: alert.vitals as unknown as Vitals,
+                triageLevel: alert.triage_level as unknown as TriageLevel,
                 timestamp: alert.timestamp
               },
               ambulanceId: alert.ambulance_id,
               hospitalId: alert.hospital_id,
               eta: alert.eta || 0,
-              status: alert.status as any,
+              status: alert.status as unknown as Alert['status'],
               timestamp: alert.timestamp,
               completedAt: alert.completed_at || undefined,
               requiredEquipment: alert.required_equipment || [],
               declineReason: alert.decline_reason || undefined,
               previousHospitalIds: alert.previous_hospital_ids || [],
-              auditLog: (alert.audit_log as any) || []
+              auditLog: (alert.audit_log as unknown as AuditLog[]) || []
             };
 
             setAlerts(prev => {
@@ -209,6 +308,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                 const updated = [...prev];
                 updated[index] = mappedAlert;
                 return updated;
+              }
+              if (payload.eventType === 'INSERT') {
+                playAlertSound(mappedAlert.patient.triageLevel);
               }
               return [mappedAlert, ...prev];
             });
@@ -241,7 +343,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           filter: `ambulance_id=eq.${currentAmbulanceId}`
         },
         (payload) => {
-          const alert = payload.new as any;
+          const alert = payload.new as unknown as any;
           console.log('🔔 Realtime ambulance alert event:', {
             type: payload.eventType,
             alertId: alert?.id,
@@ -261,20 +363,20 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                 gender: alert.patient_gender as 'male' | 'female' | 'other',
                 contact: alert.patient_contact || '',
                 complaint: alert.patient_complaint || '',
-                vitals: alert.vitals as any,
-                triageLevel: alert.triage_level as any,
+                vitals: alert.vitals as unknown as Vitals,
+                triageLevel: alert.triage_level as unknown as TriageLevel,
                 timestamp: alert.timestamp
               },
               ambulanceId: alert.ambulance_id,
               hospitalId: alert.hospital_id,
               eta: alert.eta || 0,
-              status: alert.status as any,
+              status: alert.status as unknown as Alert['status'],
               timestamp: alert.timestamp,
               completedAt: alert.completed_at || undefined,
               requiredEquipment: alert.required_equipment || [],
               declineReason: alert.decline_reason || undefined,
               previousHospitalIds: alert.previous_hospital_ids || [],
-              auditLog: (alert.audit_log as any) || []
+              auditLog: (alert.audit_log as unknown as AuditLog[]) || []
             };
 
             setAlerts(prev => {
@@ -328,7 +430,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       contact: patient.contact,
       complaint: patient.complaint,
       triage_level: patient.triageLevel,
-      vitals: patient.vitals as any,
+      vitals: patient.vitals as unknown as Json,
       medical_history: patient.medicalHistory || [],
       current_hospital_id: null,
       ambulance_id: currentAmbulanceId
@@ -373,7 +475,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     hospitalId: string,
     distance?: number,
     eta?: number,
-    requiredEquipment?: string[]
+    requiredEquipment?: string[],
+    previousHospitalIds?: string[]
   ): Promise<Hospital> => {
     const selectedHospital = hospitals.find((h) => h.id === hospitalId);
     if (!selectedHospital) {
@@ -439,7 +542,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       eta: eta || null,
       status: 'pending',
       required_equipment: requiredEquipment || [],
-      audit_log: auditLog as any,
+      previous_hospital_ids: previousHospitalIds || [],
+      audit_log: auditLog as unknown as Json,
       timestamp: new Date().toISOString()
     });
 
@@ -480,7 +584,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       .update({
         status,
         decline_reason: status === 'declined' ? declineReason : null,
-        audit_log: updatedAuditLog as any
+        audit_log: updatedAuditLog as unknown as Json
       } as AlertUpdate)
       .eq('id', alertId);
 
@@ -514,7 +618,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       .update({
         status: 'completed',
         completed_at: new Date().toISOString(),
-        audit_log: updatedAuditLog as any
+        audit_log: updatedAuditLog as unknown as Json
       } as AlertUpdate)
       .eq('id', alertId);
 
@@ -561,7 +665,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         .update({
           status: 'cancelled',
           decline_reason: `Hospital changed: ${reason}`,
-          audit_log: updatedAuditLog as any,
+          audit_log: updatedAuditLog as unknown as Json,
           completed_at: new Date().toISOString()
         } as AlertUpdate)
         .eq('id', existingAlert.id);
@@ -596,13 +700,20 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       if (newHospital) {
         console.log('📤 Sending new alert to hospital:', newHospitalId);
         try {
+          // Calculate new ETA based on distance
+          const newDistance = newHospital.distance || 0;
+          const newEta = Math.max(3, Math.ceil((newDistance / 40) * 60));
+          
+          const prevHospitals = [...(existingAlert.previousHospitalIds || []), existingAlert.hospitalId];
+
           const result = await sendAlert(
             patientId,
             existingAlert.ambulanceId,
             newHospitalId,
-            existingAlert.eta,
-            existingAlert.eta,
-            existingAlert.requiredEquipment
+            newDistance,
+            newEta,
+            existingAlert.requiredEquipment,
+            prevHospitals
           );
           console.log('✅ New alert sent successfully:', result);
         } catch (error) {
@@ -639,7 +750,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const { error } = await supabase
       .from('alerts')
       .update({
-        audit_log: updatedAuditLog as any
+        audit_log: updatedAuditLog as unknown as Json
       } as AlertUpdate)
       .eq('id', alertId);
 
@@ -725,27 +836,33 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const value = useMemo(() => ({
+    patients,
+    alerts,
+    hospitals,
+    currentUser,
+    currentHospitalId,
+    currentAmbulanceId,
+    addPatient,
+    updatePatient,
+    sendAlert,
+    updateAlertStatus,
+    completeCase,
+    changeHospital,
+    markHospitalUnavailable,
+    addHospital,
+    login,
+    logout,
+    isLoading
+  }), [
+    patients, alerts, hospitals, currentUser, 
+    currentHospitalId, currentAmbulanceId, isLoading,
+    /* Since we're not wrapping functions in useCallback yet, this will still update when functions are recreated,
+       but it's a step toward memoization. To fully memoize, we would wrap all functions above in useCallback. */
+  ]);
+
   return (
-    <AppContext.Provider
-      value={{
-        patients,
-        alerts,
-        hospitals,
-        currentUser,
-        currentHospitalId,
-        currentAmbulanceId,
-        addPatient,
-        updatePatient,
-        sendAlert,
-        updateAlertStatus,
-        completeCase,
-        changeHospital,
-        markHospitalUnavailable,
-        addHospital,
-        login,
-        logout,
-      }}
-    >
+    <AppContext.Provider value={value}>
       {children}
     </AppContext.Provider>
   );
@@ -753,8 +870,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
 export const useApp = () => {
   const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within AppProvider');
+  if (context === undefined) {
+    throw new Error('useApp must be used within an AppProvider');
   }
   return context;
 };

@@ -7,12 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Building2, AlertTriangle, Activity, CheckCircle, LogOut } from 'lucide-react';
-import { playAlertSound } from '@/utils/alertSounds';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const HospitalDashboard = () => {
-  const { alerts, currentUser, currentHospitalId, logout, hospitals } = useApp();
+  const { alerts, currentUser, currentHospitalId, logout, hospitals, isLoading } = useApp();
   const navigate = useNavigate();
-  const previousAlertCount = useRef(alerts.length);
 
   const currentHospital = hospitals.find(h => h.id === currentHospitalId);
 
@@ -32,13 +31,33 @@ const HospitalDashboard = () => {
   const urgentCount = activeAlerts.filter(a => a.patient.triageLevel === 'urgent' && a.status === 'pending').length;
   const stableCount = activeAlerts.filter(a => a.patient.triageLevel === 'stable' && a.status === 'pending').length;
 
-  useEffect(() => {
-    if (alerts.length > previousAlertCount.current) {
-      const newAlert = alerts[alerts.length - 1];
-      playAlertSound(newAlert.patient.triageLevel);
-    }
-    previousAlertCount.current = alerts.length;
-  }, [alerts]);
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-hospital-bg p-6">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="flex justify-between items-center mb-8">
+            <div className="flex items-center gap-4">
+              <Skeleton className="w-14 h-14 rounded-full" />
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-64" />
+                <Skeleton className="h-4 w-48" />
+              </div>
+            </div>
+            <Skeleton className="h-10 w-24" />
+          </div>
+          <div className="grid grid-cols-3 gap-6 mb-8">
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-32 w-full" />
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-40 w-full" />
+            <Skeleton className="h-40 w-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-hospital-bg p-6">

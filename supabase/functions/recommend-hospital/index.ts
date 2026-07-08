@@ -1,7 +1,5 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { GROQ_API_KEY } from "../config/keys.ts";
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -60,8 +58,8 @@ serve(async (req) => {
     console.log('Received recommendation request for patient with triage:', patientData.triageLevel);
     console.log('Ambulance location (audit):', ambulanceLocation);
 
-    // Try to get API key from env first, then fall back to config import
-    const apiKey = Deno.env.get('GROQ_API_KEY') || GROQ_API_KEY;
+    // Get API key from Supabase Secrets
+    const apiKey = Deno.env.get('GROQ_API_KEY');
 
     if (!apiKey || apiKey === "your_groq_api_key_here") {
       console.log('No valid Groq API key found, returning fallback signal');

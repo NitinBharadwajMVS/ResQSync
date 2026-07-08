@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { MultipleSymptomDropdown } from './MultipleSymptomDropdown';
 import { Hospital } from '@/types/patient';
 import { toast } from 'sonner';
+import { Loader2, MapPin } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 
 interface AddHospitalDialogProps {
   open: boolean;
@@ -28,6 +30,56 @@ export const AddHospitalDialog = ({ open, onOpenChange, onAdd }: AddHospitalDial
     longitude: '',
     equipment: [] as string[],
   });
+
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const fetchSuggestions = async (query: string) => {
+    if (!query || query.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    
+    const token = import.meta.env.VITE_MAPBOX_TOKEN;
+    if (!token) return;
+
+    setIsSearching(true);
+    try {
+      const res = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${token}&types=poi,address&limit=5`
+      );
+      const data = await res.json();
+      setSuggestions(data.features || []);
+      setShowSuggestions(true);
+    } catch (error) {
+      console.error("Geocoding error:", error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSelectSuggestion = (feature: any) => {
+    setFormData({
+      ...formData,
+      address: feature.place_name,
+      name: feature.text || formData.name, // Auto-fill name if it's a POI
+      latitude: feature.center[1].toString(),
+      longitude: feature.center[0].toString()
+    });
+    setShowSuggestions(false);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,15 +140,46 @@ export const AddHospitalDialog = ({ open, onOpenChange, onAdd }: AddHospitalDial
             />
           </div>
 
-          <div>
+          <div ref={wrapperRef} className="relative z-50">
             <Label htmlFor="address">Address / Locality *</Label>
-            <Input
-              id="address"
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              placeholder="e.g., Koramangala, Bangalore"
-              required
-            />
+            <div className="relative">
+              <Input
+                id="address"
+                value={formData.address}
+                onChange={(e) => {
+                  setFormData({ ...formData, address: e.target.value });
+                  fetchSuggestions(e.target.value);
+                }}
+                onFocus={() => {
+                  if (suggestions.length > 0) setShowSuggestions(true);
+                }}
+                placeholder="e.g., Koramangala, Bangalore"
+                required
+                autoComplete="off"
+              />
+              {isSearching && (
+                <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+              )}
+            </div>
+
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-md shadow-lg overflow-hidden z-50 max-h-60 overflow-y-auto">
+                {suggestions.map((feature, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    className="w-full text-left px-4 py-3 hover:bg-muted focus:bg-muted border-b last:border-b-0 flex items-start gap-2"
+                    onClick={() => handleSelectSuggestion(feature)}
+                  >
+                    <MapPin className="w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                    <div>
+                      <div className="text-sm font-medium">{feature.text}</div>
+                      <div className="text-xs text-muted-foreground">{feature.place_name}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>

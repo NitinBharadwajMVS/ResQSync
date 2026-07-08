@@ -258,6 +258,12 @@ export const PatientForm = ({ triageLevel, onClose }: PatientFormProps) => {
         hospitals={hospitals}
         selectedHospitalId={selectedHospitalId}
         onSelect={(hospital) => setSelectedHospitalId(hospital.id)}
+        patientDataForAI={{
+          vitals,
+          triageLevel,
+          complaint: formData.complaints.join(', ') || selectedPatient?.complaint || '',
+          requiredEquipment
+        }}
       />
 
       <LiveVitalsDisplay

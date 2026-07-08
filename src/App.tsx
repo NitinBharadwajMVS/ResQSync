@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppProvider } from "@/contexts/AppContext";
 import Index from "./pages/Index";
@@ -11,27 +11,37 @@ import AmbulanceDashboard from "./pages/AmbulanceDashboard";
 import HospitalDashboard from "./pages/HospitalDashboard";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+
+
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AppProvider>
+  <AppProvider>
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/ambulance-login" element={<AmbulanceLogin />} />
-            <Route path="/hospital-login" element={<HospitalLogin />} />
-            <Route path="/ambulance" element={<AmbulanceDashboard />} />
-            <Route path="/hospital" element={<HospitalDashboard />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+        <ErrorBoundary>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/ambulance-login" element={<AmbulanceLogin />} />
+              <Route path="/hospital-login" element={<HospitalLogin />} />
+              <Route path="/ambulance" element={
+                <ProtectedRoute allowedRoles={['ambulance', 'admin']}>
+                  <AmbulanceDashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/hospital" element={
+                <ProtectedRoute allowedRoles={['hospital', 'admin']}>
+                  <HospitalDashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </ErrorBoundary>
       </TooltipProvider>
     </AppProvider>
-  </QueryClientProvider>
 );
 
 export default App;

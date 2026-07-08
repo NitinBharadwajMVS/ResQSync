@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Hospital } from '@/types/patient';
+import { Hospital, Vitals } from '@/types/patient';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -13,8 +13,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Building2, Navigation, Clock, Search, Plus, MapPin, Loader2, RefreshCw } from 'lucide-react';
-import { calculateDistance, calculateETA, sortHospitalsByDistance } from '@/utils/distanceCalculator';
+import { Building2, Navigation, Clock, Search, Plus, MapPin, Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { calculateDistance, calculateETA, sortHospitalsByDistance, fetchMapboxETAs } from '@/utils/distanceCalculator';
 import { AddHospitalDialog } from './AddHospitalDialog';
 import { HospitalRow } from './HospitalRow';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,12 @@ interface HospitalSelectorProps {
   alertId?: string;
   readOnly?: boolean;
   onAddHospital?: (hospital: Hospital) => void;
+  patientDataForAI?: {
+    vitals: Vitals;
+    triageLevel: string;
+    complaint: string;
+    requiredEquipment?: string[];
+  };
 }
 
 type GeolocationStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'error';
@@ -44,6 +51,7 @@ export const HospitalSelector = ({
   alertId,
   readOnly = false,
   onAddHospital,
+  patientDataForAI,
 }: HospitalSelectorProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedForConfirm, setSelectedForConfirm] = useState<Hospital | null>(null);
@@ -53,12 +61,18 @@ export const HospitalSelector = ({
   const [ambulanceLocation, setAmbulanceLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [usingFallback, setUsingFallback] = useState(false);
   const [etaMethod, setEtaMethod] = useState<'routing' | 'fallback'>('fallback');
+  const [hospitalsWithDistances, setHospitalsWithDistances] = useState<Hospital[]>(hospitals);
+  const [isFetchingETAs, setIsFetchingETAs] = useState(false);
 
   // Recalculate hospital distances and ETAs based on ambulance location
-  const hospitalsWithDistances = useMemo(() => {
-    if (!ambulanceLocation) return hospitals;
+  useEffect(() => {
+    if (!ambulanceLocation) {
+      setHospitalsWithDistances(hospitals);
+      return;
+    }
     
-    return hospitals.map(hospital => {
+    // First pass: Instant Haversine calculations
+    const haversineHospitals = hospitals.map(hospital => {
       const distance = calculateDistance(
         ambulanceLocation.latitude,
         ambulanceLocation.longitude,
@@ -72,9 +86,52 @@ export const HospitalSelector = ({
         eta: isNaN(eta) ? 0 : eta
       };
     });
-  }, [hospitals, ambulanceLocation]);
+    
+    setHospitalsWithDistances(haversineHospitals);
+    setEtaMethod('fallback');
 
-  const sortedHospitals = sortHospitalsByDistance(hospitalsWithDistances, alertId);
+    // Second pass: Accurate Mapbox Matrix API ETAs
+    const getAccurateETAs = async () => {
+      if (!import.meta.env.VITE_MAPBOX_TOKEN) return;
+      
+      setIsFetchingETAs(true);
+      try {
+        const accurateHospitals = await fetchMapboxETAs(ambulanceLocation, haversineHospitals);
+        setHospitalsWithDistances(accurateHospitals);
+        setEtaMethod('routing');
+      } catch (err) {
+        console.error("Failed to get Mapbox ETAs", err);
+      } finally {
+        setIsFetchingETAs(false);
+      }
+    };
+
+    getAccurateETAs();
+  }, [ambulanceLocation, hospitals]);
+
+  const sortedHospitals = useMemo(() => {
+    const baseSorted = sortHospitalsByDistance(hospitalsWithDistances, alertId);
+    
+    if (patientDataForAI?.requiredEquipment && patientDataForAI.requiredEquipment.length > 0) {
+      return baseSorted.sort((a, b) => {
+        // Normalize equipment arrays for comparison
+        const aEquip = (a.equipment || []).map(e => e.toLowerCase());
+        const bEquip = (b.equipment || []).map(e => e.toLowerCase());
+        const reqEquip = patientDataForAI.requiredEquipment!.map(e => e.toLowerCase());
+
+        const aMatchCount = reqEquip.filter(eq => aEquip.includes(eq)).length;
+        const bMatchCount = reqEquip.filter(eq => bEquip.includes(eq)).length;
+        
+        if (aMatchCount !== bMatchCount) {
+          return bMatchCount - aMatchCount; // Higher match count first
+        }
+        // If match count is the same, maintain distance sorting
+        return (a.distance || 0) - (b.distance || 0);
+      });
+    }
+    
+    return baseSorted;
+  }, [hospitalsWithDistances, alertId, patientDataForAI]);
   const selectedHospital = hospitals.find((h) => h.id === selectedHospitalId);
 
   // Filter hospitals based on search query
@@ -237,10 +294,18 @@ export const HospitalSelector = ({
 
               {/* Dev log - compact */}
               {ambulanceLocation && (
-                <div className="px-6 py-2 bg-muted/30 text-[10px] font-mono text-muted-foreground border-b">
-                  Location: {ambulanceLocation.latitude.toFixed(4)}, {ambulanceLocation.longitude.toFixed(4)}
-                  {usingFallback && <span className="ml-2 text-amber-600">(Fallback)</span>}
-                  <span className="ml-3">• ETA: {etaMethod === 'routing' ? 'Routing API' : 'Haversine (40 km/h)'}</span>
+                <div className="px-6 py-2 bg-muted/30 text-[10px] font-mono text-muted-foreground border-b flex justify-between items-center">
+                  <div>
+                    Location: {ambulanceLocation.latitude.toFixed(4)}, {ambulanceLocation.longitude.toFixed(4)}
+                    {usingFallback && <span className="ml-2 text-amber-600">(Fallback)</span>}
+                    <span className="ml-3">• ETA: {etaMethod === 'routing' ? 'Mapbox Traffic Routing' : 'Haversine (40 km/h)'}</span>
+                  </div>
+                  {isFetchingETAs && (
+                    <span className="flex items-center gap-1 text-primary animate-pulse">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Fetching live traffic...
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -257,14 +322,21 @@ export const HospitalSelector = ({
                       No hospitals found matching your search.
                     </div>
                   )}
-                  {ambulanceLocation && filteredHospitals.map((hospital) => (
-                    <HospitalRow
-                      key={hospital.id}
-                      hospital={hospital}
-                      isSelected={hospital.id === selectedHospitalId}
-                      onSelect={handleSelect}
-                    />
-                  ))}
+                  {ambulanceLocation && filteredHospitals.map((hospital, index) => {
+                    const hasRequiredEquip = patientDataForAI?.requiredEquipment && patientDataForAI.requiredEquipment.length > 0;
+                    // Tag the first hospital as recommended if there are required equipments, since it's already sorted by best match
+                    const isRecommended = index === 0 && !!hasRequiredEquip;
+
+                    return (
+                      <HospitalRow
+                        key={hospital.id}
+                        hospital={hospital}
+                        isSelected={hospital.id === selectedHospitalId}
+                        onSelect={handleSelect}
+                        isRecommended={isRecommended}
+                      />
+                    );
+                  })}
                 </div>
               </ScrollArea>
 
@@ -276,7 +348,6 @@ export const HospitalSelector = ({
             </DialogContent>
           </Dialog>
         </div>
-
         {selectedHospital && (
           <Card className="p-4 border-primary/30">
             <div className="flex items-center justify-between">
