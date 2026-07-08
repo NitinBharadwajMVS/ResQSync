@@ -119,7 +119,7 @@ export const fetchNearbyMapboxHospitals = async (
   const token = import.meta.env.VITE_MAPBOX_TOKEN;
   if (!token) return [];
 
-  const url = `https://api.mapbox.com/search/searchbox/v1/category/hospital?proximity=${longitude},${latitude}&access_token=${token}&limit=10`;
+  const url = `https://api.mapbox.com/search/searchbox/v1/category/hospital?proximity=${longitude},${latitude}&access_token=${token}&limit=25`;
 
   try {
     const response = await fetch(url);
@@ -138,7 +138,7 @@ export const fetchNearbyMapboxHospitals = async (
         id: crypto.randomUUID(),
         name: feature.properties.name,
         address: address,
-        contact_number: feature.properties.metadata?.phone || '',
+        contact: feature.properties.metadata?.phone || '',
         latitude: feature.geometry.coordinates[1],
         longitude: feature.geometry.coordinates[0],
         equipment: [],
