@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Patient, TriageLevel, Vitals } from '@/types/patient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,9 +8,10 @@ import { LiveVitalsDisplay } from './LiveVitalsDisplay';
 import { MultipleSymptomDropdown } from './MultipleSymptomDropdown';
 import { HospitalSelector } from './HospitalSelector';
 import { useApp } from '@/contexts/AppContext';
-import { Send } from 'lucide-react';
+import { Send, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { calculateETA } from '@/utils/distanceCalculator';
+import { predictRequiredEquipment } from '@/utils/aiEquipmentPredictor';
 
 interface PatientFormProps {
   triageLevel: TriageLevel;
@@ -23,6 +24,7 @@ export const PatientForm = ({ triageLevel, onClose }: PatientFormProps) => {
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [selectedHospitalId, setSelectedHospitalId] = useState<string>('');
   const [requiredEquipment, setRequiredEquipment] = useState<string[]>([]);
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     age: '',
@@ -40,6 +42,35 @@ export const PatientForm = ({ triageLevel, onClose }: PatientFormProps) => {
   });
 
   const selectedPatient = patients.find(p => p.id === selectedPatientId);
+
+  // AI Equipment Prediction based on complaints
+  useEffect(() => {
+    const activeComplaints = isNewPatient ? formData.complaints : (selectedPatient?.complaint ? selectedPatient.complaint.split(',').map(s => s.trim()) : []);
+    
+    if (activeComplaints.length === 0) {
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsAiLoading(true);
+      try {
+        const suggested = await predictRequiredEquipment(activeComplaints);
+        if (suggested && suggested.length > 0) {
+          // Merge with existing selected equipment
+          setRequiredEquipment(prev => {
+            const newEq = new Set([...prev, ...suggested]);
+            return Array.from(newEq);
+          });
+        }
+      } catch (err) {
+        console.error("AI prediction failed", err);
+      } finally {
+        setIsAiLoading(false);
+      }
+    }, 1500); // 1.5s debounce
+
+    return () => clearTimeout(timer);
+  }, [formData.complaints, selectedPatient, isNewPatient]);
 
   const handleSendAlert = async () => {
     // Validate hospital selection first
@@ -245,7 +276,15 @@ export const PatientForm = ({ triageLevel, onClose }: PatientFormProps) => {
       )}
 
       <div>
-        <Label>Required Equipment (Optional)</Label>
+        <div className="flex items-center gap-2 mb-2">
+          <Label className="mb-0">Required Equipment (Optional)</Label>
+          {isAiLoading && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 text-xs font-medium animate-pulse">
+              <Sparkles className="w-3 h-3" />
+              AI Analyzing...
+            </div>
+          )}
+        </div>
         <MultipleSymptomDropdown
           values={requiredEquipment}
           onChange={setRequiredEquipment}
