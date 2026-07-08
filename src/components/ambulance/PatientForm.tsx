@@ -57,11 +57,8 @@ export const PatientForm = ({ triageLevel, onClose }: PatientFormProps) => {
       try {
         const suggested = await predictRequiredEquipment(activeComplaints);
         if (suggested && suggested.length > 0) {
-          // Merge with existing selected equipment
-          setRequiredEquipment(prev => {
-            const newEq = new Set([...prev, ...suggested]);
-            return Array.from(newEq);
-          });
+          // Replace equipment with new AI suggestion (don't merge with stale old predictions)
+          setRequiredEquipment(suggested);
         }
       } catch (err) {
         console.error("AI prediction failed", err);
