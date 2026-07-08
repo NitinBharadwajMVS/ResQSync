@@ -372,9 +372,13 @@ export const HospitalSelector = ({
                   )}
                   {ambulanceLocation && filteredHospitals.map((hospital, index) => {
                     const hasRequiredEquip = patientDataForAI?.requiredEquipment && patientDataForAI.requiredEquipment.length > 0;
-                    // Show recommended badge on any hospital with >= 50% equipment match
+                    // Show recommended badge only on verified medical facilities with >= 50% equipment match
+                    const medicalKeywords = ['hospital', 'clinic', 'medical', 'health', 'nursing', 'specialty', 'speciality', 'multispeciality', 'institute', 'care centre', 'care center', 'healthcare', 'fortis', 'apollo', 'manipal', 'narayana', 'aster', 'kauvery', 'sakra', 'columbia'];
+                    const nameLower = hospital.name.toLowerCase();
+                    const isMedicalFacility = medicalKeywords.some(kw => nameLower.includes(kw));
+                    
                     let isRecommended = false;
-                    if (hasRequiredEquip) {
+                    if (hasRequiredEquip && isMedicalFacility) {
                       const hospEquip = (hospital.equipment || []).map(e => e.toLowerCase());
                       const reqEquip = patientDataForAI.requiredEquipment!.map(e => e.toLowerCase());
                       const matchCount = reqEquip.filter(eq => hospEquip.includes(eq)).length;
