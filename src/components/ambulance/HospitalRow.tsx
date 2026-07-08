@@ -94,7 +94,7 @@ export const HospitalRow = ({ hospital, isSelected, onSelect, isRecommended }: H
           <div className="flex gap-2 flex-wrap mt-2">
             <Badge variant="outline" className="flex items-center gap-1.5 px-2.5 py-1">
               <Navigation className="w-3.5 h-3.5" />
-              <span className="font-medium">{distance > 0 ? distance.toFixed(2) : '—'} km</span>
+              <span className="font-medium">{distance >= 0 ? distance.toFixed(2) : '—'} km</span>
             </Badge>
             <Badge variant="outline" className="flex items-center gap-1.5 px-2.5 py-1">
               <Clock className="w-3.5 h-3.5" />
