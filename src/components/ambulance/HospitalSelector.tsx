@@ -167,7 +167,7 @@ export const HospitalSelector = ({
     
     return baseSorted;
   }, [hospitalsWithDistances, alertId, patientDataForAI]);
-  const selectedHospital = hospitals.find((h) => h.id === selectedHospitalId);
+  const selectedHospital = hospitalsWithDistances.find((h) => h.id === selectedHospitalId) || hospitals.find((h) => h.id === selectedHospitalId);
 
   // Filter hospitals based on search query
   const filteredHospitals = useMemo(() => {

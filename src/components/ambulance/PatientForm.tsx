@@ -23,6 +23,7 @@ export const PatientForm = ({ triageLevel, onClose }: PatientFormProps) => {
   const [isNewPatient, setIsNewPatient] = useState(true);
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [selectedHospitalId, setSelectedHospitalId] = useState<string>('');
+  const [selectedHospitalObj, setSelectedHospitalObj] = useState<Hospital | null>(null);
   const [requiredEquipment, setRequiredEquipment] = useState<string[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -132,7 +133,8 @@ export const PatientForm = ({ triageLevel, onClose }: PatientFormProps) => {
       }
     }
 
-    const selectedHospital = hospitals.find(h => h.id === selectedHospitalId);
+    // Use the stored hospital object (which has live Mapbox distance) or fall back to hospitals array
+    const selectedHospital = selectedHospitalObj || hospitals.find(h => h.id === selectedHospitalId);
     if (!selectedHospital) {
       toast.error('Hospital not found');
       return;
@@ -140,7 +142,7 @@ export const PatientForm = ({ triageLevel, onClose }: PatientFormProps) => {
 
     const ambulanceId = currentUser?.linkedEntity || 'amb-001';
     const distance = selectedHospital.distance || 0;
-    const eta = calculateETA(distance);
+    const eta = selectedHospital.eta || calculateETA(distance);
 
     try {
       const hospital = await sendAlert(
@@ -296,7 +298,7 @@ export const PatientForm = ({ triageLevel, onClose }: PatientFormProps) => {
       <HospitalSelector
         hospitals={hospitals}
         selectedHospitalId={selectedHospitalId}
-        onSelect={(hospital) => setSelectedHospitalId(hospital.id)}
+        onSelect={(hospital) => { setSelectedHospitalId(hospital.id); setSelectedHospitalObj(hospital); }}
         patientDataForAI={{
           vitals,
           triageLevel,
