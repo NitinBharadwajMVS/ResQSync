@@ -98,28 +98,28 @@ export const HospitalSelector = ({
       
       setIsFetchingETAs(true);
       try {
-        // Fetch Mapbox ETAs for Supabase hospitals AND Mapbox POIs in parallel
-        const [accurateHospitals, mapboxHospitals] = await Promise.all([
-          fetchMapboxETAs(ambulanceLocation, haversineHospitals),
-          fetchNearbyMapboxHospitals(ambulanceLocation.latitude, ambulanceLocation.longitude)
-        ]);
+        // 1. Fetch Mapbox POIs first
+        const mapboxHospitals = await fetchNearbyMapboxHospitals(ambulanceLocation.latitude, ambulanceLocation.longitude);
 
-        // Merge Mapbox POIs into the list, avoiding duplicates (by name proximity)
-        const combinedHospitals = [...accurateHospitals];
+        // 2. Merge them with haversineHospitals, avoiding duplicates
+        const combinedInitial = [...haversineHospitals];
         mapboxHospitals.forEach(mapboxHospital => {
-          // Basic deduplication: if there's already a hospital with a very similar name or very close coordinates, skip it
-          const isDuplicate = combinedHospitals.some(h => 
+          // Basic deduplication
+          const isDuplicate = combinedInitial.some(h => 
             h.name.toLowerCase().includes(mapboxHospital.name.toLowerCase()) || 
             mapboxHospital.name.toLowerCase().includes(h.name.toLowerCase()) ||
             (Math.abs(h.latitude - mapboxHospital.latitude) < 0.005 && Math.abs(h.longitude - mapboxHospital.longitude) < 0.005)
           );
           
           if (!isDuplicate) {
-            combinedHospitals.push(mapboxHospital);
+            combinedInitial.push(mapboxHospital);
           }
         });
 
-        setHospitalsWithDistances(combinedHospitals);
+        // 3. Fetch Mapbox ETAs for the combined list so external POIs get real driving distances
+        const accurateHospitals = await fetchMapboxETAs(ambulanceLocation, combinedInitial);
+
+        setHospitalsWithDistances(accurateHospitals);
         setEtaMethod('routing');
       } catch (err) {
         console.error("Failed to get Mapbox ETAs", err);
