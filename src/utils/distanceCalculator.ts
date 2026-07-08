@@ -130,7 +130,14 @@ export const fetchNearbyMapboxHospitals = async (
     
     if (!data.features) return [];
 
-    return data.features.map((feature: any) => {
+    const medicalKeywords = ['hospital', 'clinic', 'medical', 'health', 'nursing', 'specialty', 'speciality', 'multispeciality', 'institute', 'care centre', 'care center', 'healthcare', 'fortis', 'apollo', 'manipal', 'narayana', 'aster', 'kauvery', 'sakra', 'columbia'];
+
+    return data.features
+      .filter((feature: any) => {
+        const name = (feature.properties.name || '').toLowerCase();
+        return medicalKeywords.some(kw => name.includes(kw));
+      })
+      .map((feature: any) => {
       // Map Mapbox Search API response to Hospital type
       const address = feature.properties.place_formatted || feature.properties.full_address || feature.properties.address || '';
       
