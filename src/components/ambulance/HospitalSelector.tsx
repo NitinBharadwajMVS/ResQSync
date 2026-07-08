@@ -143,12 +143,25 @@ export const HospitalSelector = ({
 
         const aMatchCount = reqEquip.filter(eq => aEquip.includes(eq)).length;
         const bMatchCount = reqEquip.filter(eq => bEquip.includes(eq)).length;
-        
-        if (aMatchCount !== bMatchCount) {
-          return bMatchCount - aMatchCount; // Higher match count first
-        }
-        // If match count is the same, maintain distance sorting
-        return (a.distance || 0) - (b.distance || 0);
+        const totalRequired = reqEquip.length;
+
+        // Calculate equipment match ratio (0 to 1)
+        const aMatchRatio = totalRequired > 0 ? aMatchCount / totalRequired : 0;
+        const bMatchRatio = totalRequired > 0 ? bMatchCount / totalRequired : 0;
+
+        const aDist = a.distance || 999;
+        const bDist = b.distance || 999;
+
+        // Weighted score: Lower is better
+        // Equipment bonus: hospitals with equipment get a big distance reduction
+        // A hospital with 100% match at 15km scores like ~5km
+        // A hospital with 0% match at 2km scores like ~2km
+        // This ensures nearby hospitals still beat far-away ones even with full equipment match
+        const equipmentWeight = 10; // km bonus for full equipment match
+        const aScore = aDist - (aMatchRatio * equipmentWeight);
+        const bScore = bDist - (bMatchRatio * equipmentWeight);
+
+        return aScore - bScore;
       });
     }
     
