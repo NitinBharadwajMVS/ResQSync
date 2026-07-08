@@ -111,3 +111,45 @@ export const fetchMapboxETAs = async (
     return hospitals;
   }
 };
+
+export const fetchNearbyMapboxHospitals = async (
+  latitude: number,
+  longitude: number
+): Promise<Hospital[]> => {
+  const token = import.meta.env.VITE_MAPBOX_TOKEN;
+  if (!token) return [];
+
+  const url = `https://api.mapbox.com/search/searchbox/v1/category/hospital?proximity=${longitude},${latitude}&access_token=${token}&limit=10`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Mapbox API error: ${response.status}`);
+    }
+    const data = await response.json();
+    
+    if (!data.features) return [];
+
+    return data.features.map((feature: any) => {
+      // Map Mapbox Search API response to Hospital type
+      const address = feature.properties.place_formatted || feature.properties.full_address || feature.properties.address || '';
+      
+      return {
+        id: crypto.randomUUID(),
+        name: feature.properties.name,
+        address: address,
+        contact_number: feature.properties.metadata?.phone || '',
+        latitude: feature.geometry.coordinates[1],
+        longitude: feature.geometry.coordinates[0],
+        equipment: [],
+        available_beds: null,
+        isExternal: true, // Custom flag to identify Mapbox results
+        distance: Math.round((feature.properties.distance / 1000) * 10) / 10,
+        eta: calculateETA(feature.properties.distance / 1000)
+      };
+    });
+  } catch (error) {
+    console.error("Error fetching Mapbox nearby hospitals:", error);
+    return [];
+  }
+};

@@ -1,5 +1,5 @@
 import { Hospital } from '@/types/patient';
-import { Building2, Phone, Navigation, Clock, CheckCircle } from 'lucide-react';
+import { Building2, Phone, Navigation, Clock, CheckCircle, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -60,6 +60,12 @@ export const HospitalRow = ({ hospital, isSelected, onSelect, isRecommended }: H
               {isRecommended && (
                 <Badge variant="default" className="ml-2 bg-green-600 hover:bg-green-700 text-xs">
                   Recommended Match
+                </Badge>
+              )}
+              {hospital.isExternal && (
+                <Badge variant="secondary" className="ml-2 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200">
+                  <MapPin className="w-3 h-3 mr-1" />
+                  Mapbox Result
                 </Badge>
               )}
             </h3>

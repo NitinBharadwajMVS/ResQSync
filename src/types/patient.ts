@@ -40,6 +40,7 @@ export interface Hospital {
   latitude: number;
   longitude: number;
   eta?: number; // Estimated time of arrival in minutes
+  isExternal?: boolean; // Flag to identify Mapbox results
 }
 
 export interface AuditLog {

@@ -15,11 +15,12 @@ import {
 } from '@/components/ui/dialog';
 import { Building2, Navigation, Clock, Search, Plus, MapPin, Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { calculateDistance, calculateETA, sortHospitalsByDistance, fetchMapboxETAs } from '@/utils/distanceCalculator';
+import { calculateDistance, calculateETA, sortHospitalsByDistance, fetchMapboxETAs, fetchNearbyMapboxHospitals } from '@/utils/distanceCalculator';
 import { AddHospitalDialog } from './AddHospitalDialog';
 import { HospitalRow } from './HospitalRow';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useApp } from '@/contexts/AppContext';
 
 interface HospitalSelectorProps {
   hospitals: Hospital[];
@@ -58,6 +59,7 @@ export const HospitalSelector = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [geolocationStatus, setGeolocationStatus] = useState<GeolocationStatus>('idle');
+  const { addHospital } = useApp();
   const [ambulanceLocation, setAmbulanceLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [usingFallback, setUsingFallback] = useState(false);
   const [etaMethod, setEtaMethod] = useState<'routing' | 'fallback'>('fallback');
@@ -96,8 +98,28 @@ export const HospitalSelector = ({
       
       setIsFetchingETAs(true);
       try {
-        const accurateHospitals = await fetchMapboxETAs(ambulanceLocation, haversineHospitals);
-        setHospitalsWithDistances(accurateHospitals);
+        // Fetch Mapbox ETAs for Supabase hospitals AND Mapbox POIs in parallel
+        const [accurateHospitals, mapboxHospitals] = await Promise.all([
+          fetchMapboxETAs(ambulanceLocation, haversineHospitals),
+          fetchNearbyMapboxHospitals(ambulanceLocation.latitude, ambulanceLocation.longitude)
+        ]);
+
+        // Merge Mapbox POIs into the list, avoiding duplicates (by name proximity)
+        const combinedHospitals = [...accurateHospitals];
+        mapboxHospitals.forEach(mapboxHospital => {
+          // Basic deduplication: if there's already a hospital with a very similar name or very close coordinates, skip it
+          const isDuplicate = combinedHospitals.some(h => 
+            h.name.toLowerCase().includes(mapboxHospital.name.toLowerCase()) || 
+            mapboxHospital.name.toLowerCase().includes(h.name.toLowerCase()) ||
+            (Math.abs(h.latitude - mapboxHospital.latitude) < 0.005 && Math.abs(h.longitude - mapboxHospital.longitude) < 0.005)
+          );
+          
+          if (!isDuplicate) {
+            combinedHospitals.push(mapboxHospital);
+          }
+        });
+
+        setHospitalsWithDistances(combinedHospitals);
         setEtaMethod('routing');
       } catch (err) {
         console.error("Failed to get Mapbox ETAs", err);
@@ -186,7 +208,20 @@ export const HospitalSelector = ({
     );
   };
 
-  const handleSelect = (hospital: Hospital) => {
+  const handleSelect = async (hospital: Hospital) => {
+    if (hospital.isExternal) {
+      toast.info(`Registering ${hospital.name} into database...`);
+      try {
+        await addHospital({
+          ...hospital,
+          isExternal: false // Clear the flag since it's now in the database
+        });
+      } catch (err) {
+        toast.error(`Failed to register ${hospital.name}. Please try again.`);
+        return;
+      }
+    }
+    
     onSelect(hospital);
     setIsOpen(false);
     setSelectedForConfirm(null);
