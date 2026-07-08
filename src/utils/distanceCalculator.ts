@@ -60,7 +60,9 @@ export const fetchMapboxETAs = async (
 
   // Mapbox Matrix API allows up to 25 coordinates per request. 
   // 1 ambulance + 24 nearest hospitals = 25 coordinates max.
-  const topHospitals = hospitals.slice(0, 24);
+  // Sort by Haversine distance first so we only fetch accurate ETAs for the closest ones
+  const sortedByHaversine = [...hospitals].sort((a, b) => (a.distance || 0) - (b.distance || 0));
+  const topHospitals = sortedByHaversine.slice(0, 24);
   if (topHospitals.length === 0) return hospitals;
 
   // Format: longitude,latitude
