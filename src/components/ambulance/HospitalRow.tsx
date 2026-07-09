@@ -11,14 +11,13 @@ interface HospitalRowProps {
   isSelected: boolean;
   onSelect: (hospital: Hospital) => void;
   isRecommended?: boolean;
-  hasAccount?: boolean;
 }
 
-export const HospitalRow = ({ hospital, isSelected, onSelect, isRecommended, hasAccount = true }: HospitalRowProps) => {
+export const HospitalRow = ({ hospital, isSelected, onSelect, isRecommended }: HospitalRowProps) => {
   const distance = hospital.distance || 0;
   const eta = hospital.eta || 0;
   const locality = getLocality(hospital.address);
-  const showCallPrompt = !hasAccount;
+  const showCallPrompt = hospital.isExternal;
 
   const handleClick = () => {
     try {

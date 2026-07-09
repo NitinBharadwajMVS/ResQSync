@@ -392,7 +392,6 @@ export const HospitalSelector = ({
                         isSelected={hospital.id === selectedHospitalId}
                         onSelect={handleSelect}
                         isRecommended={isRecommended}
-                        hasAccount={!hospital.id.includes('-')}
                       />
                     );
                   })}
