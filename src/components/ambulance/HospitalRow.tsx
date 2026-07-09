@@ -18,7 +18,7 @@ export const HospitalRow = ({ hospital, isSelected, onSelect, isRecommended, has
   const distance = hospital.distance || 0;
   const eta = hospital.eta || 0;
   const locality = getLocality(hospital.address);
-  const showCallPrompt = !hasAccount && !hospital.isExternal;
+  const showCallPrompt = !hasAccount;
 
   const handleClick = () => {
     try {
