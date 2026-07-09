@@ -1,5 +1,5 @@
 import { Hospital } from '@/types/patient';
-import { Building2, Phone, Navigation, Clock, CheckCircle, MapPin } from 'lucide-react';
+import { Building2, Phone, Navigation, Clock, CheckCircle, MapPin, PhoneCall } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -11,12 +11,14 @@ interface HospitalRowProps {
   isSelected: boolean;
   onSelect: (hospital: Hospital) => void;
   isRecommended?: boolean;
+  hasAccount?: boolean;
 }
 
-export const HospitalRow = ({ hospital, isSelected, onSelect, isRecommended }: HospitalRowProps) => {
+export const HospitalRow = ({ hospital, isSelected, onSelect, isRecommended, hasAccount = true }: HospitalRowProps) => {
   const distance = hospital.distance || 0;
   const eta = hospital.eta || 0;
   const locality = getLocality(hospital.address);
+  const showCallPrompt = !hasAccount && !hospital.isExternal;
 
   const handleClick = () => {
     try {
@@ -68,6 +70,12 @@ export const HospitalRow = ({ hospital, isSelected, onSelect, isRecommended }: H
                   Mapbox Result
                 </Badge>
               )}
+              {showCallPrompt && (
+                <Badge variant="secondary" className="ml-2 text-xs bg-amber-100 text-amber-700 hover:bg-amber-200">
+                  <PhoneCall className="w-3 h-3 mr-1" />
+                  Call Only
+                </Badge>
+              )}
             </h3>
             {isSelected && (
               <CheckCircle className="w-6 h-6 text-primary flex-shrink-0" />
@@ -78,18 +86,30 @@ export const HospitalRow = ({ hospital, isSelected, onSelect, isRecommended }: H
             {locality}
           </p>
 
-          {hospital.contact && (
-            <div className="flex items-center gap-2 text-sm">
-              <Phone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+          {/* Contact info - prominent for hospitals without accounts */}
+          {hospital.contact ? (
+            <div className={cn(
+              "flex items-center gap-2 text-sm",
+              showCallPrompt && "bg-amber-50 border border-amber-200 rounded-md px-3 py-1.5"
+            )}>
+              <Phone className={cn("w-4 h-4 flex-shrink-0", showCallPrompt ? "text-amber-600" : "text-muted-foreground")} />
               <a 
                 href={`tel:${hospital.contact}`} 
-                className="hover:text-primary truncate font-medium"
+                className={cn(
+                  "hover:text-primary truncate font-medium",
+                  showCallPrompt && "text-amber-700 font-bold"
+                )}
                 onClick={(e) => e.stopPropagation()}
               >
                 {hospital.contact}
               </a>
+              {showCallPrompt && (
+                <span className="text-xs text-amber-600 ml-auto whitespace-nowrap">Call directly</span>
+              )}
             </div>
-          )}
+          ) : showCallPrompt ? (
+            <div className="text-xs text-amber-600 italic">No contact info available</div>
+          ) : null}
 
           <div className="flex gap-2 flex-wrap mt-2">
             <Badge variant="outline" className="flex items-center gap-1.5 px-2.5 py-1">
