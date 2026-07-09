@@ -13,6 +13,7 @@ import { LogOut, Ambulance, CheckCircle, AlertCircle, Clock, Building2, Edit, Ac
 import { useApp } from '@/contexts/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { calculateETA } from '@/utils/distanceCalculator';
 import { supabase } from '@/integrations/supabase/client';
