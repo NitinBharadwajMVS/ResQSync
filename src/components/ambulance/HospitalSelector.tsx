@@ -65,21 +65,6 @@ export const HospitalSelector = ({
   const [etaMethod, setEtaMethod] = useState<'routing' | 'fallback'>('fallback');
   const [hospitalsWithDistances, setHospitalsWithDistances] = useState<Hospital[]>(hospitals);
   const [isFetchingETAs, setIsFetchingETAs] = useState(false);
-  const [registeredHospitalIds, setRegisteredHospitalIds] = useState<Set<string>>(new Set());
-
-  // Fetch which hospitals have login accounts
-  useEffect(() => {
-    const fetchRegistered = async () => {
-      const { data } = await supabase
-        .from('app_users')
-        .select('linked_entity')
-        .eq('role', 'hospital');
-      if (data) {
-        setRegisteredHospitalIds(new Set(data.map(u => u.linked_entity).filter(Boolean)));
-      }
-    };
-    fetchRegistered();
-  }, []);
 
   // Recalculate hospital distances and ETAs based on ambulance location
   useEffect(() => {
@@ -407,7 +392,7 @@ export const HospitalSelector = ({
                         isSelected={hospital.id === selectedHospitalId}
                         onSelect={handleSelect}
                         isRecommended={isRecommended}
-                        hasAccount={registeredHospitalIds.has(hospital.id)}
+                        hasAccount={!hospital.id.includes('-')}
                       />
                     );
                   })}
