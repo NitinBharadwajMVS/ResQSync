@@ -83,7 +83,7 @@ const AmbulanceDashboard = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser?.linkedEntity, activeAlerts.length]);
+  }, [currentUser?.linkedEntity, activeAlerts]);
 
   const handleLogout = () => {
     logout();
